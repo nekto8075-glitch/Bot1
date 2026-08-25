@@ -50,22 +50,26 @@ def delete_business_msg(message_id: int):
     conn.commit()
     conn.close()
 
-# 1. Сохраняем каждое сообщение из бизнес-чатов (ЛС)
+# 1. Сохранение сообщений и от тебя, и от собеседника
 @dp.business_message()
 async def handle_business_message(message: types.Message):
-    if message.text:
-        user_name = message.from_user.full_name
-        if message.from_user.username:
-            user_name += f" (@{message.from_user.username})"
+    # Достаем текст или подпись к фото/видео
+    msg_text = message.text or message.caption or "[Медиасообщение без текста]"
 
-        save_business_msg(
-            message_id=message.message_id,
-            chat_id=message.chat.id,
-            user_name=user_name,
-            text=message.text
-        )
+    # Определяем реального автора сообщения
+    sender = message.from_user
+    user_name = sender.full_name if sender else "Неизвестный"
+    if sender and sender.username:
+        user_name += f" (@{sender.username})"
 
-# 2. Ловим событие удаления сообщений в ЛС и отправляем логи в группу
+    save_business_msg(
+        message_id=message.message_id,
+        chat_id=message.chat.id,
+        user_name=user_name,
+        text=msg_text
+    )
+
+# 2. Лог при удалении сообщения
 @dp.deleted_business_messages()
 async def handle_deleted_business_messages(event: types.BusinessMessagesDeleted):
     for msg_id in event.message_ids:
