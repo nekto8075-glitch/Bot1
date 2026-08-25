@@ -4,7 +4,7 @@ import logging
 from aiogram import Bot, Dispatcher, types
 
 # --- ТВОИ НАСТРОЙКИ ---
-API_TOKEN = '8943596179:AAH4msDTZxHvMvmhUs07Nn_UaFdv4jFkNBY'
+API_TOKEN = '8943596179:AAHTkA2FBlbfuWlgQUY5DVSrYjxBacxzElo'
 LOG_GROUP_ID = '@NewrebornSky'
 
 logging.basicConfig(level=logging.INFO)
@@ -50,7 +50,7 @@ def delete_business_msg(message_id: int):
     conn.commit()
     conn.close()
 
-# 1. Сохраняем каждое входящее/исходящее сообщение из личных чатов
+# 1. Сохраняем каждое сообщение из бизнес-чатов (ЛС)
 @dp.business_message()
 async def handle_business_message(message: types.Message):
     if message.text:
@@ -65,7 +65,7 @@ async def handle_business_message(message: types.Message):
             text=message.text
         )
 
-# 2. Ловим удаление сообщений в личных чатах и отправляем логи в группу
+# 2. Ловим событие удаления сообщений в ЛС и отправляем логи в группу
 @dp.deleted_business_messages()
 async def handle_deleted_business_messages(event: types.BusinessMessagesDeleted):
     for msg_id in event.message_ids:
