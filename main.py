@@ -2,8 +2,6 @@ import asyncio
 import sqlite3
 import logging
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
-from aiogram.exceptions import TelegramBadRequest
 
 # --- ТВОИ НАСТРОЙКИ ---
 API_TOKEN = '8943596179:AAH4msDTZxHvMvmhUs07Nn_UaFdv4jFkNBY'
@@ -17,7 +15,7 @@ def init_db():
     conn = sqlite3.connect('messages_cache.db')
     cursor = conn.cursor()
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS messages (
+        CREATE TABLE IF NOT EXISTS business_messages (
             message_id INTEGER PRIMARY KEY,
             chat_id INTEGER,
             user_name TEXT,
@@ -27,86 +25,70 @@ def init_db():
     conn.commit()
     conn.close()
 
-def save_msg(message_id: int, chat_id: int, user_name: str, text: str):
+def save_business_msg(message_id: int, chat_id: int, user_name: str, text: str):
     conn = sqlite3.connect('messages_cache.db')
     cursor = conn.cursor()
     cursor.execute(
-        'INSERT OR REPLACE INTO messages (message_id, chat_id, user_name, text) VALUES (?, ?, ?, ?)',
+        'INSERT OR REPLACE INTO business_messages (message_id, chat_id, user_name, text) VALUES (?, ?, ?, ?)',
         (message_id, chat_id, user_name, text)
     )
     conn.commit()
     conn.close()
 
-def get_all_msgs():
+def get_business_msg(message_id: int):
     conn = sqlite3.connect('messages_cache.db')
     cursor = conn.cursor()
-    cursor.execute('SELECT message_id, chat_id, user_name, text FROM messages')
-    rows = cursor.fetchall()
+    cursor.execute('SELECT chat_id, user_name, text FROM business_messages WHERE message_id = ?', (message_id,))
+    row = cursor.fetchone()
     conn.close()
-    return rows
+    return row
 
-def delete_msg_from_db(message_id: int):
+def delete_business_msg(message_id: int):
     conn = sqlite3.connect('messages_cache.db')
     cursor = conn.cursor()
-    cursor.execute('DELETE FROM messages WHERE message_id = ?', (message_id,))
+    cursor.execute('DELETE FROM business_messages WHERE message_id = ?', (message_id,))
     conn.commit()
     conn.close()
 
-@dp.message(Command("start"))
-async def start_handler(message: types.Message):
-    await message.answer("Привет! Бот запущен и отслеживает удаление сообщений.")
-
-@dp.message()
-async def handle_incoming_message(message: types.Message):
-    # Игнорируем сообщения из самого канала логов
-    if str(message.chat.username) == 'NewrebornSky':
-        return
-
+# 1. Сохраняем каждое входящее/исходящее сообщение из личных чатов
+@dp.business_message()
+async def handle_business_message(message: types.Message):
     if message.text:
         user_name = message.from_user.full_name
         if message.from_user.username:
             user_name += f" (@{message.from_user.username})"
 
-        save_msg(
+        save_business_msg(
             message_id=message.message_id,
             chat_id=message.chat.id,
             user_name=user_name,
             text=message.text
         )
 
-async def check_deleted_loop():
-    while True:
-        await asyncio.sleep(5)
-        records = get_all_msgs()
-
-        for msg_id, chat_id, user_name, text in records:
+# 2. Ловим удаление сообщений в личных чатах и отправляем логи в группу
+@dp.deleted_business_messages()
+async def handle_deleted_business_messages(event: types.BusinessMessagesDeleted):
+    for msg_id in event.message_ids:
+        cached_data = get_business_msg(msg_id)
+        if cached_data:
+            chat_id, user_name, text = cached_data
+            
+            report = (
+                f"🗑 **Удалено сообщение в ЛС!**\n\n"
+                f"👤 **Автор:** {user_name}\n"
+                f"💬 **Текст:** {text}"
+            )
+            
             try:
-                await bot.edit_message_text(
-                    text=text,
-                    chat_id=chat_id,
-                    message_id=msg_id
-                )
-            except TelegramBadRequest as e:
-                err_msg = str(e).lower()
-                if "message is not modified" in err_msg:
-                    continue
-
-                if "message to edit not found" in err_msg or "message can't be edited" in err_msg:
-                    report = (
-                        f"🗑 **Удалено сообщение!**\n\n"
-                        f"👤 **Автор:** {user_name}\n"
-                        f"💬 **Текст:** {text}"
-                    )
-                    await bot.send_message(chat_id=LOG_GROUP_ID, text=report)
-                    delete_msg_from_db(msg_id)
-            except Exception:
-                pass
+                await bot.send_message(chat_id=LOG_GROUP_ID, text=report)
+            except Exception as e:
+                logging.error(f"Ошибка отправки лога: {e}")
+                
+            delete_business_msg(msg_id)
 
 async def main():
     init_db()
-    asyncio.create_task(check_deleted_loop())
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
- 
