@@ -7,7 +7,7 @@ from aiohttp import web
 from aiogram import Bot, Dispatcher, types
 
 # --- НАСТРОЙКИ ---
-API_TOKEN = os.getenv('BOT_TOKEN', '8943596179:AAFZ4rN8jZI4vURgxKR6NOqipNcaQ__L3Jk')
+API_TOKEN = os.getenv('BOT_TOKEN', '8943596179:AAGKTnFE1Kd81NuX6osAB7EeR-EhNG9Qm14')
 LOG_GROUP_ID = -1003995649688
 PORT = int(os.getenv('PORT', 10000))
 
@@ -97,7 +97,7 @@ async def handle_business_message(message: types.Message):
     sender = message.from_user
     text = message.text or message.caption or ""
 
-    # Проверка на команду /mute (ответом на сообщение)
+    # Проверка на команду /mute
     if text.startswith("/mute"):
         args = text.split()
         minutes = 15
@@ -112,7 +112,7 @@ async def handle_business_message(message: types.Message):
             await message.reply("Ответь этой командой на сообщение собеседника!")
         return
 
-    # Проверка на команду /unmute (ответом на сообщение)
+    # Проверка на команду /unmute
     if text.startswith("/unmute"):
         if message.reply_to_message and message.reply_to_message.from_user:
             target = message.reply_to_message.from_user
@@ -123,7 +123,7 @@ async def handle_business_message(message: types.Message):
     if not sender:
         return
 
-    # Если отправитель в муте — удаляем его входящие сообщения
+    # Если отправитель замучен — удаляем его входящее сообщение
     if is_user_muted(sender.id):
         try:
             await message.delete()
@@ -131,7 +131,7 @@ async def handle_business_message(message: types.Message):
         except Exception as e:
             logging.error(f"Не удалось удалить сообщение: {e}")
 
-    # Кэшируем обычные сообщения для логов
+    # Кэшируем обычное сообщение
     user_name = sender.full_name
     if sender.username:
         user_name += f" (@{sender.username})"
@@ -207,7 +207,7 @@ async def handle_deleted_business_messages(event: types.BusinessMessagesDeleted)
                 
             delete_business_msg(msg_id)
 
-# Заглушка веб-сервера для Render
+# Заглушка сервера для Render
 async def handle_web(request):
     return web.Response(text="Bot is running!")
 
