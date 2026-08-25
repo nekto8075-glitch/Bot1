@@ -4,7 +4,6 @@ import sqlite3
 import logging
 from aiogram import Bot, Dispatcher, types
 
-# Токен берется из настроек Render (Environment Variables)
 API_TOKEN = os.getenv('BOT_TOKEN', '8943596179:AAFZ4rN8jZl4vURgxKR6NOqipNcaQ__L3Jk')
 LOG_GROUP_ID = '@NewrebornSky'
 
@@ -20,18 +19,19 @@ def init_db():
             message_id INTEGER PRIMARY KEY,
             chat_id INTEGER,
             user_name TEXT,
-            text TEXT
+            text TEXT,
+            sticker_id TEXT
         )
     ''')
     conn.commit()
     conn.close()
 
-def save_business_msg(message_id: int, chat_id: int, user_name: str, text: str):
+def save_business_msg(message_id: int, chat_id: int, user_name: str, text: str, sticker_id: str = None):
     conn = sqlite3.connect('messages_cache.db')
     cursor = conn.cursor()
     cursor.execute(
-        'INSERT OR REPLACE INTO business_messages (message_id, chat_id, user_name, text) VALUES (?, ?, ?, ?)',
-        (message_id, chat_id, user_name, text)
+        'INSERT OR REPLACE INTO business_messages (message_id, chat_id, user_name, text, sticker_id) VALUES (?, ?, ?, ?, ?)',
+        (message_id, chat_id, user_name, text, sticker_id)
     )
     conn.commit()
     conn.close()
@@ -39,7 +39,7 @@ def save_business_msg(message_id: int, chat_id: int, user_name: str, text: str):
 def get_business_msg(message_id: int):
     conn = sqlite3.connect('messages_cache.db')
     cursor = conn.cursor()
-    cursor.execute('SELECT chat_id, user_name, text FROM business_messages WHERE message_id = ?', (message_id,))
+    cursor.execute('SELECT chat_id, user_name, text, sticker_id FROM business_messages WHERE message_id = ?', (message_id,))
     row = cursor.fetchone()
     conn.close()
     return row
@@ -53,18 +53,24 @@ def delete_business_msg(message_id: int):
 
 @dp.business_message()
 async def handle_business_message(message: types.Message):
-    msg_text = message.text or message.caption or "[Медиасообщение без текста]"
-
     sender = message.from_user
     user_name = sender.full_name if sender else "Собеседник"
     if sender and sender.username:
         user_name += f" (@{sender.username})"
 
+    sticker_id = None
+    if message.sticker:
+        msg_text = f"[Стикер {message.sticker.emoji or ''}]"
+        sticker_id = message.sticker.file_id
+    else:
+        msg_text = message.text or message.caption or "[Медиасообщение без текста]"
+
     save_business_msg(
         message_id=message.message_id,
         chat_id=message.chat.id,
         user_name=user_name,
-        text=msg_text
+        text=msg_text,
+        sticker_id=sticker_id
     )
 
 @dp.deleted_business_messages()
@@ -72,16 +78,20 @@ async def handle_deleted_business_messages(event: types.BusinessMessagesDeleted)
     for msg_id in event.message_ids:
         cached_data = get_business_msg(msg_id)
         if cached_data:
-            chat_id, user_name, text = cached_data
+            chat_id, user_name, text, sticker_id = cached_data
             
             report = (
                 f"🗑 **Удалено сообщение в ЛС!**\n\n"
                 f"👤 **Автор:** {user_name}\n"
-                f"💬 **Текст:** {text}"
+                f"💬 **Текст/Тип:** {text}"
             )
             
             try:
+                # Отправляем текстовый отчёт
                 await bot.send_message(chat_id=LOG_GROUP_ID, text=report)
+                # Если удалён стикер — присылаем его копию в канал
+                if sticker_id:
+                    await bot.send_sticker(chat_id=LOG_GROUP_ID, sticker=sticker_id)
             except Exception as e:
                 logging.error(f"Ошибка отправки лога: {e}")
                 
