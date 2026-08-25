@@ -5,7 +5,6 @@ import logging
 from datetime import datetime, timedelta
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
-from aiogram.types import ChatPermissions
 
 # --- ТВОИ НАСТРОЙКИ ---
 API_TOKEN = os.getenv('BOT_TOKEN', '8943596179:AAFZ4rN8jZl4vURgxKR6NOqipNcaQ__L3Jk')
@@ -18,6 +17,7 @@ dp = Dispatcher()
 def init_db():
     conn = sqlite3.connect('messages_cache.db')
     cursor = conn.cursor()
+    # Таблица для кэша сообщений
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS business_messages (
             message_id INTEGER PRIMARY KEY,
@@ -25,6 +25,13 @@ def init_db():
             user_name TEXT,
             text TEXT,
             sticker_id TEXT
+        )
+    ''')
+    # Таблица для замученных пользователей в ЛС
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS muted_users (
+            user_id INTEGER PRIMARY KEY,
+            until_date TEXT
         )
     ''')
     conn.commit()
@@ -55,51 +62,80 @@ def delete_business_msg(message_id: int):
     conn.commit()
     conn.close()
 
-# --- КОМАНДА МУТА ДЛЯ ГРУПП ---
+# --- ФУНКЦИИ МУТА ДЛЯ ЛС ---
+def mute_user(user_id: int, minutes: int):
+    conn = sqlite3.connect('messages_cache.db')
+    cursor = conn.cursor()
+    until_date = (datetime.now() + timedelta(minutes=minutes)).isoformat()
+    cursor.execute('INSERT OR REPLACE INTO muted_users (user_id, until_date) VALUES (?, ?)', (user_id, until_date))
+    conn.commit()
+    conn.close()
+
+def is_user_muted(user_id: int) -> bool:
+    conn = sqlite3.connect('messages_cache.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT until_date FROM muted_users WHERE user_id = ?', (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        until_date = datetime.fromisoformat(row[0])
+        if datetime.now() < until_date:
+            return True
+        else:
+            unmute_user(user_id)  # Время мута истекло
+    return False
+
+def unmute_user(user_id: int):
+    conn = sqlite3.connect('messages_cache.db')
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM muted_users WHERE user_id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+
+# --- КОМАНДЫ МУТА В ЛС И ГРУППАХ ---
 @dp.message(Command("mute"))
 async def cmd_mute(message: types.Message):
-    # Проверяем, что команда вызвана в группе или супергруппе
-    if message.chat.type not in ["group", "supergroup"]:
-        await message.reply("Команда /mute работает только в группах!")
-        return
-
-    # Проверяем права автора команды
-    member = await message.bot.get_chat_member(message.chat.id, message.from_user.id)
-    if member.status not in ["administrator", "creator"]:
-        await message.reply("Эта команда доступна только администраторам.")
-        return
-
-    # Проверяем, сделан ли ответ на сообщение нарушителя
-    if not message.reply_to_message:
-        await message.reply("Ответь командой /mute на сообщение того, кого нужно замутить.")
-        return
-
     args = message.text.split()
-    minutes = 15  # Время мута по умолчанию (в минутах)
-    
+    minutes = 15
     if len(args) > 1 and args[1].isdigit():
         minutes = int(args[1])
 
-    target_user = message.reply_to_message.from_user
-    until_date = datetime.now() + timedelta(minutes=minutes)
+    target_user = None
+    if message.reply_to_message:
+        target_user = message.reply_to_message.from_user
+    
+    if not target_user:
+        await message.reply("Ответь командой `/mute [минуты]` на сообщение того, кого хочешь замутить.")
+        return
 
-    try:
-        # Ограничиваем отправку сообщений
-        await message.chat.restrict(
-            user_id=target_user.id,
-            permissions=ChatPermissions(can_send_messages=False),
-            until_date=until_date
-        )
-        await message.reply(f"🤐 Пользователь {target_user.full_name} замучен на {minutes} мин.")
-    except Exception as e:
-        await message.reply(f"Не удалось замутить пользователя. Убедись, что у бота есть права админа!\nОшибка: {e}")
+    mute_user(target_user.id, minutes)
+    await message.reply(f"🤐 Пользователь {target_user.full_name} замучен в ЛС на {minutes} мин.")
 
-# --- БИЗНЕС-ЛОГИКА (ПЕРЕХВАТ СООБЩЕНИЙ И СТИКЕРОВ) ---
+@dp.message(Command("unmute"))
+async def cmd_unmute(message: types.Message):
+    if message.reply_to_message:
+        target_user = message.reply_to_message.from_user
+        unmute_user(target_user.id)
+        await message.reply(f"🔊 Пользователь {target_user.full_name} размучен.")
+
+# --- БИЗНЕС-ЛОГИКА (ОБРАБОТКА ЛС) ---
 @dp.business_message()
 async def handle_business_message(message: types.Message):
     sender = message.from_user
-    user_name = sender.full_name if sender else "Собеседник"
-    if sender and sender.username:
+    if not sender:
+        return
+
+    # Проверяем, находится ли собеседник в муте
+    if is_user_muted(sender.id):
+        try:
+            # Автоматически удаляем входящее сообщение от замученного человека
+            await message.delete()
+            return
+        except Exception as e:
+            logging.error(f"Не удалось удалить сообщение замученного пользователя: {e}")
+
+    user_name = sender.full_name
+    if sender.username:
         user_name += f" (@{sender.username})"
 
     sticker_id = None
@@ -131,9 +167,7 @@ async def handle_deleted_business_messages(event: types.BusinessMessagesDeleted)
             )
             
             try:
-                # Отправляем текстовый отчет
                 await bot.send_message(chat_id=LOG_GROUP_ID, text=report)
-                # Если удален стикер — отправляем сам стикер в канал
                 if sticker_id:
                     await bot.send_sticker(chat_id=LOG_GROUP_ID, sticker=sticker_id)
             except Exception as e:
