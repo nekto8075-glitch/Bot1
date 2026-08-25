@@ -8,7 +8,7 @@ from aiogram import Bot, Dispatcher, types
 
 # --- НАСТРОЙКИ ---
 API_TOKEN = os.getenv('BOT_TOKEN', '8943596179:AAGKTnFE1Kd81NuX6osAB7EeR-EhNG9Qm14')
-LOG_GROUP_ID = '@NewrebornSky'
+LOG_GROUP_ID = -1003995649688
 PORT = int(os.getenv('PORT', 10000))
 
 logging.basicConfig(level=logging.INFO)
@@ -163,7 +163,6 @@ async def handle_edited_business_message(message: types.Message):
 
     old_text = cached_data[2] if cached_data else "Неизвестно (до запуска бота)"
 
-    # Логируем изменение в канал
     report = (
         f"✏️ **Сообщение отредактировано в ЛС!**\n\n"
         f"👤 **Автор:** {user_name}\n"
@@ -176,7 +175,6 @@ async def handle_edited_business_message(message: types.Message):
     except Exception as e:
         logging.error(f"Ошибка отправки лога редактирования: {e}")
 
-    # Обновляем кэш сообщения на новое содержимое
     sticker_id = message.sticker.file_id if message.sticker else None
     save_business_msg(
         message_id=message.message_id,
