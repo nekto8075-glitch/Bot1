@@ -17,7 +17,6 @@ dp = Dispatcher()
 def init_db():
     conn = sqlite3.connect('messages_cache.db')
     cursor = conn.cursor()
-    # Таблица для кэша сообщений
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS business_messages (
             message_id INTEGER PRIMARY KEY,
@@ -27,7 +26,6 @@ def init_db():
             sticker_id TEXT
         )
     ''')
-    # Таблица для замученных пользователей в ЛС
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS muted_users (
             user_id INTEGER PRIMARY KEY,
@@ -62,7 +60,7 @@ def delete_business_msg(message_id: int):
     conn.commit()
     conn.close()
 
-# --- ФУНКЦИИ МУТА ДЛЯ ЛС ---
+# --- ФУНКЦИИ МУТА ---
 def mute_user(user_id: int, minutes: int):
     conn = sqlite3.connect('messages_cache.db')
     cursor = conn.cursor()
@@ -82,7 +80,7 @@ def is_user_muted(user_id: int) -> bool:
         if datetime.now() < until_date:
             return True
         else:
-            unmute_user(user_id)  # Время мута истекло
+            unmute_user(user_id)
     return False
 
 def unmute_user(user_id: int):
@@ -92,10 +90,10 @@ def unmute_user(user_id: int):
     conn.commit()
     conn.close()
 
-# --- КОМАНДЫ МУТА В ЛС ---
-@dp.message(Command("mute"))
-async def cmd_mute(message: types.Message):
-    args = message.text.split()
+# --- КОМАНДЫ МУТА В БИЗНЕС-ЧАТАХ (ЛС) ---
+@dp.business_message(Command("mute"))
+async def cmd_business_mute(message: types.Message):
+    args = message.text.split() if message.text else []
     minutes = 15
     if len(args) > 1 and args[1].isdigit():
         minutes = int(args[1])
@@ -103,36 +101,35 @@ async def cmd_mute(message: types.Message):
     target_user = None
     if message.reply_to_message:
         target_user = message.reply_to_message.from_user
-    
+
     if not target_user:
         await message.reply("Ответь командой `/mute [минуты]` на сообщение того, кого хочешь замутить.")
         return
 
     mute_user(target_user.id, minutes)
-    await message.reply(f"🤐 Пользователь {target_user.full_name} замучен в ЛС на {minutes} мин.")
+    await message.reply(f"🤐 Пользователь {target_user.full_name} замучен на {minutes} мин.")
 
-@dp.message(Command("unmute"))
-async def cmd_unmute(message: types.Message):
+@dp.business_message(Command("unmute"))
+async def cmd_business_unmute(message: types.Message):
     if message.reply_to_message:
         target_user = message.reply_to_message.from_user
         unmute_user(target_user.id)
         await message.reply(f"🔊 Пользователь {target_user.full_name} размучен.")
 
-# --- БИЗНЕС-ЛОГИКА (ОБРАБОТКА ЛС) ---
+# --- ОБРАБОТКА ВХОДЯЩИХ СООБЩЕНИЙ В ЛС ---
 @dp.business_message()
 async def handle_business_message(message: types.Message):
     sender = message.from_user
     if not sender:
         return
 
-    # Проверяем, находится ли собеседник в муте
+    # Если человек в муте — удаляем его входящее сообщение
     if is_user_muted(sender.id):
         try:
-            # Автоматически удаляем входящее сообщение от замученного человека
             await message.delete()
             return
         except Exception as e:
-            logging.error(f"Не удалось удалить сообщение замученного пользователя: {e}")
+            logging.error(f"Не удалось удалить сообщение: {e}")
 
     user_name = sender.full_name
     if sender.username:
