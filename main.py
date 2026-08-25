@@ -92,7 +92,7 @@ def unmute_user(user_id: int):
     conn.commit()
     conn.close()
 
-# --- КОМАНДЫ МУТА В ЛС И ГРУППАХ ---
+# --- КОМАНДЫ МУТА В ЛС ---
 @dp.message(Command("mute"))
 async def cmd_mute(message: types.Message):
     args = message.text.split()
