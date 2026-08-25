@@ -1,2 +1,1 @@
-aiogram
-pyTelegramBotAPI
+aiogram>=3.0.0
