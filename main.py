@@ -50,7 +50,7 @@ def delete_business_msg(message_id: int):
     conn.commit()
     conn.close()
 
-# 1. Сохранение сообщений (и твоих, и собеседника)
+# 1. Сохранение всех сообщений из ЛС (и твоих, и собеседника)
 @dp.business_message()
 async def handle_business_message(message: types.Message):
     msg_text = message.text or message.caption or "[Медиасообщение без текста]"
@@ -67,7 +67,7 @@ async def handle_business_message(message: types.Message):
         text=msg_text
     )
 
-# 2. Лог при удалении сообщения
+# 2. Логирование при удалении сообщения
 @dp.deleted_business_messages()
 async def handle_deleted_business_messages(event: types.BusinessMessagesDeleted):
     for msg_id in event.message_ids:
