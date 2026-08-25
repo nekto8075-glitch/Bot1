@@ -2,10 +2,9 @@ import asyncio
 import sqlite3
 import logging
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Filter
 
-# --- ТВОИ НАСТРОЙКИ ---
-API_TOKEN = '8943596179:AAHgaOdD1MANELrQLb2kZBWd3z-dZW1mjHw'
+# Вставь ТОЧНЫЙ токен из @BotFather вместо скобок ниже:
+API_TOKEN = '8943596179:AAFu4YjmabBvgr8x0EtvHPz96UEKw5kEfJY'
 LOG_GROUP_ID = '@NewrebornSky'
 
 logging.basicConfig(level=logging.INFO)
@@ -51,29 +50,10 @@ def delete_business_msg(message_id: int):
     conn.commit()
     conn.close()
 
-# Универсальный фильтр для ЛЮБЫХ сообщений в бизнес-аккаунте (и входящих, и исходящих)
-@dp.message()
-async def handle_any_message(message: types.Message):
-    # Проверяем, что это личный чат (бизнес-сообщения приходят именно как личные)
-    if message.chat.type == "private" and message.from_user:
-        msg_text = message.text or message.caption or "[Медиасообщение без текста]"
-        
-        user_name = message.from_user.full_name
-        if message.from_user.username:
-            user_name += f" (@{message.from_user.username})"
-
-        save_business_msg(
-            message_id=message.message_id,
-            chat_id=message.chat.id,
-            user_name=user_name,
-            text=msg_text
-        )
-
-# Также дублируем ловлю через бизнес-сообщения
 @dp.business_message()
 async def handle_business_message(message: types.Message):
     msg_text = message.text or message.caption or "[Медиасообщение без текста]"
-    
+
     sender = message.from_user
     user_name = sender.full_name if sender else "Собеседник"
     if sender and sender.username:
@@ -86,7 +66,6 @@ async def handle_business_message(message: types.Message):
         text=msg_text
     )
 
-# Лог при удалении сообщений
 @dp.deleted_business_messages()
 async def handle_deleted_business_messages(event: types.BusinessMessagesDeleted):
     for msg_id in event.message_ids:
