@@ -4,7 +4,7 @@ import logging
 from aiogram import Bot, Dispatcher, types
 
 # --- ТВОИ НАСТРОЙКИ ---
-API_TOKEN = '8943596179:AAHTkA2FBlbfuWlgQUY5DVSrYjxBacxzElo'
+API_TOKEN = '8943596179:AAHgaOdD1MANELrQLb2kZBWd3z-dZW1mjHw'
 LOG_GROUP_ID = '@NewrebornSky'
 
 logging.basicConfig(level=logging.INFO)
@@ -50,15 +50,13 @@ def delete_business_msg(message_id: int):
     conn.commit()
     conn.close()
 
-# 1. Сохранение сообщений и от тебя, и от собеседника
+# 1. Сохранение сообщений (и твоих, и собеседника)
 @dp.business_message()
 async def handle_business_message(message: types.Message):
-    # Достаем текст или подпись к фото/видео
     msg_text = message.text or message.caption or "[Медиасообщение без текста]"
 
-    # Определяем реального автора сообщения
     sender = message.from_user
-    user_name = sender.full_name if sender else "Неизвестный"
+    user_name = sender.full_name if sender else "Собеседник"
     if sender and sender.username:
         user_name += f" (@{sender.username})"
 
