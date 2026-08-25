@@ -4,7 +4,7 @@ import logging
 from aiogram import Bot, Dispatcher, types
 
 # Вставь ТОЧНЫЙ токен из @BotFather вместо скобок ниже:
-API_TOKEN = '8943596179:AAFu4YjmabBvgr8x0EtvHPz96UEKw5kEfJY'
+API_TOKEN = '8943596179:AAFZ4rN8jZl4vURgxKR6NOqipNcaQ__L3Jk'
 LOG_GROUP_ID = '@NewrebornSky'
 
 logging.basicConfig(level=logging.INFO)
