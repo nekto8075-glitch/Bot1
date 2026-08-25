@@ -91,7 +91,7 @@ def unmute_user(user_id: int):
     conn.commit()
     conn.close()
 
-# --- ОБРАБОТКА ВСЕХ ВХОДЯЩИХ БИЗНЕС-СООБЩЕНИЙ В ЛС ---
+# --- ОБРАБОТКА ВХОДЯЩИХ БИЗНЕС-СООБЩЕНИЙ В ЛС ---
 @dp.business_message()
 async def handle_business_message(message: types.Message):
     sender = message.from_user
@@ -147,6 +147,46 @@ async def handle_business_message(message: types.Message):
         sticker_id=sticker_id
     )
 
+# --- ОБРАБОТКА ИЗМЕНЕННЫХ СООБЩЕНИЙ ---
+@dp.edited_business_message()
+async def handle_edited_business_message(message: types.Message):
+    sender = message.from_user
+    if not sender:
+        return
+
+    user_name = sender.full_name
+    if sender.username:
+        user_name += f" (@{sender.username})"
+
+    new_text = message.text or message.caption or "[Медиасообщение]"
+    cached_data = get_business_msg(message.message_id)
+
+    old_text = cached_data[2] if cached_data else "Неизвестно (до запуска бота)"
+
+    # Логируем изменение в канал
+    report = (
+        f"✏️ **Сообщение отредактировано в ЛС!**\n\n"
+        f"👤 **Автор:** {user_name}\n"
+        f"🔻 **Было:** {old_text}\n"
+        f"🔺 **Стало:** {new_text}"
+    )
+
+    try:
+        await bot.send_message(chat_id=LOG_GROUP_ID, text=report)
+    except Exception as e:
+        logging.error(f"Ошибка отправки лога редактирования: {e}")
+
+    # Обновляем кэш сообщения на новое содержимое
+    sticker_id = message.sticker.file_id if message.sticker else None
+    save_business_msg(
+        message_id=message.message_id,
+        chat_id=message.chat.id,
+        user_name=user_name,
+        text=new_text,
+        sticker_id=sticker_id
+    )
+
+# --- ОБРАБОТКА УДАЛЕННЫХ СООБЩЕНИЙ ---
 @dp.deleted_business_messages()
 async def handle_deleted_business_messages(event: types.BusinessMessagesDeleted):
     for msg_id in event.message_ids:
