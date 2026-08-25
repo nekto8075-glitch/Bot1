@@ -7,7 +7,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 
 # --- ТВОИ НАСТРОЙКИ ---
-API_TOKEN = os.getenv('BOT_TOKEN', '8943596179:AAFZ4rN8jZl4vURgxKR6NOqipNcaQ__L3Jk')
+API_TOKEN = os.getenv('BOT_TOKEN', '8943596179:AAH5EaHhCN3uUGdo55eQoDWmqbvHfoLTuV8')
 LOG_GROUP_ID = '@NewrebornSky'
 
 logging.basicConfig(level=logging.INFO)
