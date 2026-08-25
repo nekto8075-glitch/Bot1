@@ -1,10 +1,11 @@
+import os
 import asyncio
 import sqlite3
 import logging
 from aiogram import Bot, Dispatcher, types
 
-# Вставь ТОЧНЫЙ токен из @BotFather вместо скобок ниже:
-API_TOKEN = '8943596179:AAFZ4rN8jZl4vURgxKR6NOqipNcaQ__L3Jk'
+# Токен берется из настроек Render (Environment Variables)
+API_TOKEN = os.getenv('BOT_TOKEN', '8943596179:AAFu4YjmabBvgr8x0EtvHPz96UEKw5kEfJY')
 LOG_GROUP_ID = '@NewrebornSky'
 
 logging.basicConfig(level=logging.INFO)
