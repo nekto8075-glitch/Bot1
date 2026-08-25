@@ -91,11 +91,28 @@ def unmute_user(user_id: int):
     conn.commit()
     conn.close()
 
-# --- ОБРАБОТКА ВХОДЯЩИХ БИЗНЕС-СООБЩЕНИЙ В ЛС ---
+# --- ОБРАБОТКА ВХОДЯЩИХ И ИСХОДЯЩИХ БИЗНЕС-СООБЩЕНИЙ ---
 @dp.business_message()
 async def handle_business_message(message: types.Message):
     sender = message.from_user
     text = message.text or message.caption or ""
+
+    # Команда /b для отправки заблюренного (скрытого) сообщения
+    if text.startswith("/b "):
+        blur_text = text[3:].strip() # Убираем команду /b
+        if blur_text:
+            try:
+                # Удаляем твое оригинальное сообщение с командой
+                await message.delete()
+                # Отправляем вместо него текст под спойлером
+                await bot.send_message(
+                    chat_id=message.chat.id,
+                    text=f"||{blur_text}||",
+                    parse_mode="MarkdownV2"
+                )
+            except Exception as e:
+                logging.error(f"Ошибка отправки заблюренного сообщения: {e}")
+        return
 
     # Проверка на команду /mute
     if text.startswith("/mute"):
@@ -131,7 +148,7 @@ async def handle_business_message(message: types.Message):
         except Exception as e:
             logging.error(f"Не удалось удалить сообщение: {e}")
 
-    # Кэшируем обычное сообщение
+    # Кэшируем обычное входящее сообщение
     user_name = sender.full_name
     if sender.username:
         user_name += f" (@{sender.username})"
