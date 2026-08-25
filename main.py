@@ -5,10 +5,9 @@ import logging
 from datetime import datetime, timedelta
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Filter
 
 # --- НАСТРОЙКИ ---
-API_TOKEN = os.getenv('BOT_TOKEN', '8943596179:AAGKTnFE1Kd81NuX6osAB7EeR-EhNG9Qm14')
+API_TOKEN = os.getenv('BOT_TOKEN', '8943596179:AAFZ4rN8jZI4vURgxKR6NOqipNcaQ__L3Jk')
 LOG_GROUP_ID = -1003995649688
 PORT = int(os.getenv('PORT', 10000))
 
@@ -92,36 +91,13 @@ def unmute_user(user_id: int):
     conn.commit()
     conn.close()
 
-# --- ОБРАБОТКА ИСХОДЯЩИХ СООБЩЕНИЙ (КОМАНДА /b) ---
-@dp.business_message(lambda m: m.from_user.is_bot == False)
-async def handle_all_business_messages(message: types.Message):
+# --- ОБРАБОТКА ВХОДЯЩИХ БИЗНЕС-СООБЩЕНИЙ В ЛС ---
+@dp.business_message()
+async def handle_business_message(message: types.Message):
     sender = message.from_user
     text = message.text or message.caption or ""
 
-    # Проверяем, написал ли ТЫ команду /b (если это твое исходящее сообщение)
-    # В Telegram Business сообщения от тебя имеют флаг отправки
-    if text.startswith("/b "):
-        blur_text = text[3:].strip()
-        if blur_text:
-            try:
-                # Удаляем твоё сообщение с командой
-                await message.delete()
-                # Отправляем заблюренный текст
-                await bot.send_message(
-                    chat_id=message.chat.id,
-                    text=f"||{blur_text}||",
-                    parse_mode="MarkdownV2"
-                )
-            except Exception as e:
-                logging.error(f"Ошибка обработки /b: {e}")
-        return
-
-    # Если сообщение написал НЕ ты, а тебе (входящее)
-    if not sender or sender.id == message.chat.id: # Это упрощенная проверка на исходящее
-        # Обработка мутов и кэширования входящих
-        pass
-
-    # Проверка на команду /mute (от тебя в ответ на сообщение собеседника)
+    # Проверка на команду /mute (ответом на сообщение)
     if text.startswith("/mute"):
         args = text.split()
         minutes = 15
@@ -136,6 +112,7 @@ async def handle_all_business_messages(message: types.Message):
             await message.reply("Ответь этой командой на сообщение собеседника!")
         return
 
+    # Проверка на команду /unmute (ответом на сообщение)
     if text.startswith("/unmute"):
         if message.reply_to_message and message.reply_to_message.from_user:
             target = message.reply_to_message.from_user
@@ -143,30 +120,32 @@ async def handle_all_business_messages(message: types.Message):
             await message.reply(f"🔊 Пользователь {target.full_name} размучен.")
         return
 
-    # Если сообщение входящее и пользователь в муте — удаляем
-    if sender and is_user_muted(sender.id) and sender.id != message.chat.id:
+    if not sender:
+        return
+
+    # Если отправитель в муте — удаляем его входящие сообщения
+    if is_user_muted(sender.id):
         try:
             await message.delete()
             return
         except Exception as e:
             logging.error(f"Не удалось удалить сообщение: {e}")
 
-    # Кэшируем входящее сообщение для логов удаления/редактирования
-    if sender:
-        user_name = sender.full_name
-        if sender.username:
-            user_name += f" (@{sender.username})"
+    # Кэшируем обычные сообщения для логов
+    user_name = sender.full_name
+    if sender.username:
+        user_name += f" (@{sender.username})"
 
-        sticker_id = message.sticker.file_id if message.sticker else None
-        msg_text = f"[Стикер {message.sticker.emoji or ''}]" if message.sticker else text or "[Медиасообщение]"
+    sticker_id = message.sticker.file_id if message.sticker else None
+    msg_text = f"[Стикер {message.sticker.emoji or ''}]" if message.sticker else text or "[Медиасообщение]"
 
-        save_business_msg(
-            message_id=message.message_id,
-            chat_id=message.chat.id,
-            user_name=user_name,
-            text=msg_text,
-            sticker_id=sticker_id
-        )
+    save_business_msg(
+        message_id=message.message_id,
+        chat_id=message.chat.id,
+        user_name=user_name,
+        text=msg_text,
+        sticker_id=sticker_id
+    )
 
 # --- ОБРАБОТКА ИЗМЕНЕННЫХ СООБЩЕНИЙ ---
 @dp.edited_business_message()
@@ -228,7 +207,7 @@ async def handle_deleted_business_messages(event: types.BusinessMessagesDeleted)
                 
             delete_business_msg(msg_id)
 
-# Заглушка сервера для Render
+# Заглушка веб-сервера для Render
 async def handle_web(request):
     return web.Response(text="Bot is running!")
 
