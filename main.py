@@ -5,9 +5,8 @@ import logging
 from datetime import datetime, timedelta
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
 
-# --- ТВОИ НАСТРОЙКИ ---
+# --- НАСТРОЙКИ ---
 API_TOKEN = os.getenv('BOT_TOKEN', '8943596179:AAGKTnFE1Kd81NuX6osAB7EeR-EhNG9Qm14')
 LOG_GROUP_ID = '@NewrebornSky'
 PORT = int(os.getenv('PORT', 10000))
@@ -62,7 +61,7 @@ def delete_business_msg(message_id: int):
     conn.commit()
     conn.close()
 
-# --- ФУНКЦИИ МУТА ---
+# --- МУТ В БАЗЕ ---
 def mute_user(user_id: int, minutes: int):
     conn = sqlite3.connect('messages_cache.db')
     cursor = conn.cursor()
@@ -92,39 +91,39 @@ def unmute_user(user_id: int):
     conn.commit()
     conn.close()
 
-# --- КОМАНДЫ МУТА В БИЗНЕС-ЧАТАХ (ЛС) ---
-@dp.business_message(Command("mute"))
-async def cmd_business_mute(message: types.Message):
-    args = message.text.split() if message.text else []
-    minutes = 15
-    if len(args) > 1 and args[1].isdigit():
-        minutes = int(args[1])
-
-    target_user = None
-    if message.reply_to_message:
-        target_user = message.reply_to_message.from_user
-
-    if not target_user:
-        await message.reply("Ответь командой `/mute [минуты]` на сообщение того, кого хочешь замутить.")
-        return
-
-    mute_user(target_user.id, minutes)
-    await message.reply(f"🤐 Пользователь {target_user.full_name} замучен на {minutes} мин.")
-
-@dp.business_message(Command("unmute"))
-async def cmd_business_unmute(message: types.Message):
-    if message.reply_to_message:
-        target_user = message.reply_to_message.from_user
-        unmute_user(target_user.id)
-        await message.reply(f"🔊 Пользователь {target_user.full_name} размучен.")
-
-# --- ОБРАБОТКА ВХОДЯЩИХ СООБЩЕНИЙ В ЛС ---
+# --- ОБРАБОТКА ВСЕХ ВХОДЯЩИХ БИЗНЕС-СООБЩЕНИЙ В ЛС ---
 @dp.business_message()
 async def handle_business_message(message: types.Message):
     sender = message.from_user
+    text = message.text or message.caption or ""
+
+    # Проверка на команду /mute
+    if text.startswith("/mute"):
+        args = text.split()
+        minutes = 15
+        if len(args) > 1 and args[1].isdigit():
+            minutes = int(args[1])
+
+        if message.reply_to_message and message.reply_to_message.from_user:
+            target = message.reply_to_message.from_user
+            mute_user(target.id, minutes)
+            await message.reply(f"🤐 Пользователь {target.full_name} замучен на {minutes} мин.")
+        else:
+            await message.reply("Ответь этой командой на сообщение собеседника!")
+        return
+
+    # Проверка на команду /unmute
+    if text.startswith("/unmute"):
+        if message.reply_to_message and message.reply_to_message.from_user:
+            target = message.reply_to_message.from_user
+            unmute_user(target.id)
+            await message.reply(f"🔊 Пользователь {target.full_name} размучен.")
+        return
+
     if not sender:
         return
 
+    # Если отправитель замучен — удаляем его входящее сообщение
     if is_user_muted(sender.id):
         try:
             await message.delete()
@@ -132,16 +131,13 @@ async def handle_business_message(message: types.Message):
         except Exception as e:
             logging.error(f"Не удалось удалить сообщение: {e}")
 
+    # Кэшируем обычное сообщение
     user_name = sender.full_name
     if sender.username:
         user_name += f" (@{sender.username})"
 
-    sticker_id = None
-    if message.sticker:
-        msg_text = f"[Стикер {message.sticker.emoji or ''}]"
-        sticker_id = message.sticker.file_id
-    else:
-        msg_text = message.text or message.caption or "[Медиасообщение без текста]"
+    sticker_id = message.sticker.file_id if message.sticker else None
+    msg_text = f"[Стикер {message.sticker.emoji or ''}]" if message.sticker else text or "[Медиасообщение]"
 
     save_business_msg(
         message_id=message.message_id,
@@ -173,7 +169,7 @@ async def handle_deleted_business_messages(event: types.BusinessMessagesDeleted)
                 
             delete_business_msg(msg_id)
 
-# Заглушка для веб-сервера Render, чтобы тот не ругался на порты
+# Заглушка сервера для Render
 async def handle_web(request):
     return web.Response(text="Bot is running!")
 
@@ -187,7 +183,7 @@ async def web_server():
 
 async def main():
     init_db()
-    await web_server()  # Запускаем веб-сервер для Render
+    await web_server()
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
