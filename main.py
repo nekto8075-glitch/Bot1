@@ -2,6 +2,7 @@ import asyncio
 import sqlite3
 import logging
 from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
 from aiogram.exceptions import TelegramBadRequest
 
 # --- ТВОИ НАСТРОЙКИ ---
@@ -51,6 +52,10 @@ def delete_msg_from_db(message_id: int):
     conn.commit()
     conn.close()
 
+@dp.message(Command("start"))
+async def start_handler(message: types.Message):
+    await message.answer("Привет! Бот запущен и отслеживает удаление сообщений.")
+
 @dp.message()
 async def handle_incoming_message(message: types.Message):
     # Игнорируем сообщения из самого канала логов
@@ -73,7 +78,7 @@ async def check_deleted_loop():
     while True:
         await asyncio.sleep(5)
         records = get_all_msgs()
-        
+
         for msg_id, chat_id, user_name, text in records:
             try:
                 await bot.edit_message_text(
@@ -85,14 +90,14 @@ async def check_deleted_loop():
                 err_msg = str(e).lower()
                 if "message is not modified" in err_msg:
                     continue
-                
+
                 if "message to edit not found" in err_msg or "message can't be edited" in err_msg:
                     report = (
                         f"🗑 **Удалено сообщение!**\n\n"
                         f"👤 **Автор:** {user_name}\n"
                         f"💬 **Текст:** {text}"
                     )
-                    await bot.send_message(chat_id=LOG_GROUP_ID, text=report, parse_mode="Markdown")
+                    await bot.send_message(chat_id=LOG_GROUP_ID, text=report)
                     delete_msg_from_db(msg_id)
             except Exception:
                 pass
@@ -104,3 +109,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+ 
