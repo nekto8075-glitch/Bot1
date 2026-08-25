@@ -3,12 +3,14 @@ import asyncio
 import sqlite3
 import logging
 from datetime import datetime, timedelta
+from aiohttp import web
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 
 # --- ТВОИ НАСТРОЙКИ ---
 API_TOKEN = os.getenv('BOT_TOKEN', '8943596179:AAGKTnFE1Kd81NuX6osAB7EeR-EhNG9Qm14')
 LOG_GROUP_ID = '@NewrebornSky'
+PORT = int(os.getenv('PORT', 10000))
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
@@ -123,7 +125,6 @@ async def handle_business_message(message: types.Message):
     if not sender:
         return
 
-    # Если человек в муте — удаляем его входящее сообщение
     if is_user_muted(sender.id):
         try:
             await message.delete()
@@ -172,8 +173,21 @@ async def handle_deleted_business_messages(event: types.BusinessMessagesDeleted)
                 
             delete_business_msg(msg_id)
 
+# Заглушка для веб-сервера Render, чтобы тот не ругался на порты
+async def handle_web(request):
+    return web.Response(text="Bot is running!")
+
+async def web_server():
+    app = web.Application()
+    app.router.add_get("/", handle_web)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", PORT)
+    await site.start()
+
 async def main():
     init_db()
+    await web_server()  # Запускаем веб-сервер для Render
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
