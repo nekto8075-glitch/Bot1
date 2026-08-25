@@ -5,7 +5,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.exceptions import TelegramBadRequest
 
 # --- ТВОИ НАСТРОЙКИ ---
-API_TOKEN = '8943596179:AAHO94SKA3oDopmpfFVrMQ9vu-loGDYbwOE'
+API_TOKEN = '8943596179:AAFBGtbA-4DWggK03e4Zzlib4Z5qKJ3EVDU'
 LOG_GROUP_ID = '@NewrebornSky'
 
 logging.basicConfig(level=logging.INFO)
